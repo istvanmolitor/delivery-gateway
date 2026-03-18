@@ -171,7 +171,7 @@ async function fetchPickupPointsPage(
     signal,
     headers: {
       'Content-Type': 'application/json',
-      'X-Merchant-ID': MERCHANT_ID,
+      'X-Deliverygateway-Io': MERCHANT_ID,
     },
     body: JSON.stringify({
       query,
@@ -345,7 +345,9 @@ function App() {
             byId.set(point.id, point)
           }
 
-          setLoadingSummary(`Betöltve: ${byId.size} / ${total}`)
+          const partialResult = Array.from(byId.values())
+          setPickupPoints(partialResult)
+          setLoadingSummary(`Betöltve: ${partialResult.length} / ${total}`)
           currentPage += 1
         }
 
