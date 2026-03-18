@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --ink: #162126;
+  --muted: #4b5b63;
+  --accent: #d14f2a;
+  --line: #c8d4d8;
+  --line-strong: #a8b8be;
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-soft: rgba(255, 255, 255, 0.65);
+  --shadow: 0 10px 24px rgba(20, 38, 45, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', 'Avenir Next', 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(104, 148, 170, 0.24), transparent 30%),
+    radial-gradient(circle at 90% 90%, rgba(209, 79, 42, 0.2), transparent 36%),
+    linear-gradient(120deg, #eaf2f2 0%, #f4f7f7 60%, #e8eeef 100%);
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Space Grotesk', 'Trebuchet MS', sans-serif;
+  color: var(--ink);
+}
