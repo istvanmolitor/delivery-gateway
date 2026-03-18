@@ -14,9 +14,20 @@ const SESSION_ID = '9f2bb9e8-6653-482d-a953-3932f68dd07a'
 
 const DEFAULT_CENTER: [number, number] = [47.4979, 19.0402]
 const DEFAULT_ZOOM = 12
-const REQUEST_BATCH_SIZE = 700
-const MAX_POINTS_TO_RENDER = 5000
-const BOUNDS_DEBOUNCE_MS = 400
+const DEFAULT_POINTS_STEP_SIZE = 20
+const DEFAULT_MAX_POINTS_TO_RENDER = 60
+const DEFAULT_BOUNDS_DEBOUNCE_MS = 60
+
+function toPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const APP_CONFIG = {
+  pointsStepSize: toPositiveInt(import.meta.env.VITE_POINTS_STEP_SIZE, DEFAULT_POINTS_STEP_SIZE),
+  maxPointsToRender: toPositiveInt(import.meta.env.VITE_MAX_POINTS_TO_RENDER, DEFAULT_MAX_POINTS_TO_RENDER),
+  boundsDebounceMs: toPositiveInt(import.meta.env.VITE_BOUNDS_DEBOUNCE_MS, DEFAULT_BOUNDS_DEBOUNCE_MS),
+}
 
 const DAY_LABELS: Record<string, string> = {
   MONDAY: 'Hétfő',
@@ -115,6 +126,13 @@ type NominatimResult = {
   lon: string
 }
 
+type LoadingProgress = {
+  loaded: number
+  total: number
+  target: number
+  percent: number
+}
+
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIconRetina,
   iconUrl: markerIcon,
@@ -178,7 +196,7 @@ async function fetchPickupPointsPage(
       variables: {
         sessionId: SESSION_ID,
         page,
-        first: REQUEST_BATCH_SIZE,
+        first: APP_CONFIG.pointsStepSize,
         filters: {
           boundingBox: bounds,
         },
@@ -287,6 +305,7 @@ function App() {
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingSummary, setLoadingSummary] = useState('')
+  const [loadingProgress, setLoadingProgress] = useState<LoadingProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [mapError, setMapError] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
@@ -307,7 +326,7 @@ function App() {
     }
     debounceTimerRef.current = window.setTimeout(() => {
       setQueryBounds(nextBounds)
-    }, BOUNDS_DEBOUNCE_MS)
+    }, APP_CONFIG.boundsDebounceMs)
   }, [])
 
   useEffect(() => {
@@ -329,6 +348,12 @@ function App() {
       setLoading(true)
       setError(null)
       setLoadingSummary('Csomagpontok betöltése...')
+      setLoadingProgress({
+        loaded: 0,
+        total: 0,
+        target: 0,
+        percent: 0,
+      })
 
       try {
         let currentPage = 1
@@ -336,7 +361,7 @@ function App() {
         let total = 0
         const byId = new Map<string, PickupPoint>()
 
-        while (hasMorePages && byId.size < MAX_POINTS_TO_RENDER) {
+        while (hasMorePages && byId.size < APP_CONFIG.maxPointsToRender) {
           const pageResult = await fetchPickupPointsPage(currentPage, queryBounds, controller.signal)
           hasMorePages = pageResult.paginatorInfo.hasMorePages
           total = pageResult.paginatorInfo.total
@@ -346,13 +371,28 @@ function App() {
           }
 
           const partialResult = Array.from(byId.values())
+          const target = total > 0 ? Math.min(total, APP_CONFIG.maxPointsToRender) : 0
+          const percent = target > 0 ? Math.min(100, Math.round((partialResult.length / target) * 100)) : 0
           setPickupPoints(partialResult)
           setLoadingSummary(`Betöltve: ${partialResult.length} / ${total}`)
+          setLoadingProgress({
+            loaded: partialResult.length,
+            total,
+            target,
+            percent,
+          })
           currentPage += 1
         }
 
         const result = Array.from(byId.values())
+        const target = total > 0 ? Math.min(total, APP_CONFIG.maxPointsToRender) : result.length
         setPickupPoints(result)
+        setLoadingProgress({
+          loaded: result.length,
+          total,
+          target,
+          percent: target > 0 ? Math.min(100, Math.round((result.length / target) * 100)) : 100,
+        })
         setLoadingSummary(
           total > result.length
             ? `Megjelenítve ${result.length} pont (teljes találat: ${total})`
@@ -375,6 +415,16 @@ function App() {
   }, [queryBounds])
 
   const pointCountLabel = useMemo(() => `${pickupPoints.length.toLocaleString('hu-HU')} pont`, [pickupPoints.length])
+  const progressLabel = useMemo(() => {
+    if (!loadingProgress) {
+      return ''
+    }
+    const targetLabel = loadingProgress.target || loadingProgress.total
+    if (!targetLabel) {
+      return 'Betöltés előkészítése...'
+    }
+    return `Betöltve: ${loadingProgress.loaded} / ${targetLabel}`
+  }, [loadingProgress])
   const orderedOpeningHours = useMemo(() => {
     if (!activePoint?.openingHours.length) {
       return []
@@ -441,6 +491,24 @@ function App() {
               {searching ? 'Keresés...' : 'Keresés'}
             </button>
           </form>
+          {loadingProgress ? (
+            <div className="progress-block" role="status" aria-live="polite">
+              <div className="progress-head">
+                <span>{progressLabel}</span>
+                <span>{loadingProgress.percent}%</span>
+              </div>
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={loadingProgress.percent}
+                aria-label="Csomagpont betöltés állapota"
+              >
+                <div className="progress-fill" style={{ width: `${loadingProgress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
           {searchError ? <p className="warning">{searchError}</p> : null}
           <div className="status-row">
             <span>{pointCountLabel}</span>
